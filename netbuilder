@@ -25,26 +25,30 @@ sub next_range
 	my ($prev_net, $prev_maskbits) = split '/', $prev;
 	my $prev_mask = mask_map($prev_maskbits > $maskbits ? $maskbits : $prev_maskbits);
 
-=cut
-	print "next_range(@_)\n";
-	print  "prev_net = $prev_net\n";
-	printf "prev_mask = %x\n", $prev_mask;
-	printf "mask = %x\n", $mask;
-	print  "  - ".(                                  inet_aton($prev_net)                              )."\n";
-	print  "  - ".(                      unpack("N", inet_aton($prev_net))                             )."\n";
-	print  "  - ".(                      unpack("N", inet_aton($prev_net)) | ~$prev_mask                )."\n";
-	print  "  - ".(                     (unpack("N", inet_aton($prev_net)) | ~$prev_mask) + 1           )."\n";
-	print  "  - ".(                    ((unpack("N", inet_aton($prev_net)) | ~$prev_mask) + 1) & $mask  )."\n";
-	print  "  - ".(          pack("N", ((unpack("N", inet_aton($prev_net)) | ~$prev_mask) + 1) & $mask) )."\n";
-	print  "  - ".(inet_ntoa(pack("N", ((unpack("N", inet_aton($prev_net)) | ~$prev_mask) + 1) & $mask)))."\n";
-	print  "\n";
-=cut
-
 	return inet_ntoa(pack("N", ((unpack("N", inet_aton($prev_net)) | ~$prev_mask) + 1) & $mask))."/$maskbits";
 }
 
+if (@ARGV != 1) {
+	print STDERR "USAGE: $0 /path/to/definition.net\n";
+	exit 1;
+}
+if ($ARGV[0] eq "-h" || $ARGV[0] eq "--help") {
+	print STDERR "USAGE: $0 /path/to/definition.net\n".
+	             "\n".
+	             "A filename of '-' will cause netbuilder to read\n".
+	             "from standard input, suitable for use in pipelines.\n";
+	exit 0;
+}
+
+my $fh;
+if ($ARGV[0] eq '-') {
+	$fh = \*STDIN;
+} else {
+	open $fh, "<", $ARGV[0] or die "$ARGV[0]: $!\n";
+}
+
 my (%SITES, @ORDER, $current, $lastnet);
-while (<>) {
+while (<$fh>) {
 	chomp;
 	s/\s+$//;
 	s/\s*#.*//;
@@ -112,6 +116,3 @@ for my $site (@ORDER) {
 	}
 	print "\n";
 }
-
-#use Data::Dumper;
-#print Dumper(\%SITES);
