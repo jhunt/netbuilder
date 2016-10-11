@@ -1,0 +1,117 @@
+#!/usr/bin/perl
+use strict;
+use warnings;
+use Socket qw/inet_aton inet_ntoa/;
+
+sub hosts
+{
+	my ($bits) = @_;
+	$bits =~ s|^/||;
+	1 << (32 - $bits);
+}
+
+sub mask_map
+{
+	my ($bits) = @_;
+	return ((1 << $bits) - 1) << (32 - $bits);
+}
+
+sub next_range
+{
+	my ($prev, $maskbits) = @_;
+	$maskbits =~ s|^/||;
+	my $mask = mask_map($maskbits);
+
+	my ($prev_net, $prev_maskbits) = split '/', $prev;
+	my $prev_mask = mask_map($prev_maskbits > $maskbits ? $maskbits : $prev_maskbits);
+
+=cut
+	print "next_range(@_)\n";
+	print  "prev_net = $prev_net\n";
+	printf "prev_mask = %x\n", $prev_mask;
+	printf "mask = %x\n", $mask;
+	print  "  - ".(                                  inet_aton($prev_net)                              )."\n";
+	print  "  - ".(                      unpack("N", inet_aton($prev_net))                             )."\n";
+	print  "  - ".(                      unpack("N", inet_aton($prev_net)) | ~$prev_mask                )."\n";
+	print  "  - ".(                     (unpack("N", inet_aton($prev_net)) | ~$prev_mask) + 1           )."\n";
+	print  "  - ".(                    ((unpack("N", inet_aton($prev_net)) | ~$prev_mask) + 1) & $mask  )."\n";
+	print  "  - ".(          pack("N", ((unpack("N", inet_aton($prev_net)) | ~$prev_mask) + 1) & $mask) )."\n";
+	print  "  - ".(inet_ntoa(pack("N", ((unpack("N", inet_aton($prev_net)) | ~$prev_mask) + 1) & $mask)))."\n";
+	print  "\n";
+=cut
+
+	return inet_ntoa(pack("N", ((unpack("N", inet_aton($prev_net)) | ~$prev_mask) + 1) & $mask))."/$maskbits";
+}
+
+my (%SITES, @ORDER, $current, $lastnet);
+while (<>) {
+	chomp;
+	s/\s+$//;
+	s/\s*#.*//;
+	next unless $_;
+
+	if (m/^(\S+)\s+(\S+)(?:\s+@(\S+))?$/) {
+		push @ORDER, $1;
+		$current = $1;
+		$lastnet = undef;
+		$SITES{$current}{range} = $2;
+		$SITES{$current}{subnets} = [];
+		if ($3) {
+			$SITES{$current}{subnets} = $SITES{$3}{subnets};
+		}
+	} elsif (m/^\s+(\S+)\s+(\S+)$/) {
+		die "no current site!\n" unless $current;
+		my ($name, $net) = ($1, $2);
+		if ($net eq '.') {
+			die "no last net!\n" unless $lastnet;
+			$net = $lastnet;
+		}
+		$lastnet = $net;
+		push @{$SITES{$current}{subnets}}, {
+			name  => $name,
+			block => $net
+		};
+	} else {
+		die "unrecognized line '$_'\n";
+	}
+}
+
+for my $site (@ORDER) {
+	my $net = undef;
+	$SITES{$site}{subnets} = [ map {
+		if (!defined $net) {
+			$net = $SITES{$site}{range};
+			$net =~ s|/\d+$|$_->{block}|e;
+		} else {
+			$net = next_range($net, $_->{block});
+		}
+		{
+			name  => $_->{name},
+			net   => $net,
+			hosts => hosts($_->{block}),
+		};
+	} @{ $SITES{$site}{subnets} } ];
+}
+
+for my $site (@ORDER) {
+	print "### $site\n\n";
+
+	my @header = ('Component', 'Network Segment', 'IP Count');
+	my @w = map { length($_) } @header;
+	for my $net (@{ $SITES{$site}{subnets} }) {
+		$w[0] = length($net->{name} ."") > $w[0] ? length($net->{name} ."") : $w[0];
+		$w[1] = length($net->{net}  ."") > $w[1] ? length($net->{net}  ."") : $w[1];
+		$w[2] = length($net->{hosts}."") > $w[2] ? length($net->{hosts}."") : $w[2];
+	}
+	my $fmt = "| %-$w[0]s | %-$w[1]s | %-$w[2]s |\n";
+	printf $fmt, @header;
+	printf $fmt, map { "-" x length($_) } @header;
+
+	for my $net (@{ $SITES{$site}{subnets} }) {
+		printf $fmt, $net->{name}, $net->{net}, $net->{hosts};
+	}
+	print "\n";
+}
+
+#use Data::Dumper;
+#print Dumper(\%SITES);

@@ -1,0 +1,26 @@
+# network definition file
+global  10.0.0.0/20
+  infra          /24
+  proto-bosh     .      # same as above, a /24...
+  vault          .
+  shield         .
+  concourse      .
+
+alpha   10.0.16.0/20
+  infra           /24
+  jumpbox         /25
+  bosh            .
+  cf-edge         /24
+  cf-core         .
+  cf-runtime      /23   # cloud foundry runtime is BIG
+  redis           /24
+  rabbit          .
+  mysql           .
+  errand-broker   /26   # an even smaller network...
+  app-vault       .
+
+
+sandbox   10.3.16.0/20  @alpha    # same subnets as the alpha site
+preprod   10.3.32.0/20  @sandbox  # (but different network numbering)
+
+prod      10.3.48.0/20  @sandbox  # aliases can even be chained!
